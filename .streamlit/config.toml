@@ -1,0 +1,6 @@
+# Default (200MB) is too small for a >=60min Full-HD training video (300-600MB
+# source per the TOR requirement). Raised to comfortably cover that, while the
+# builder/persistence pipeline streams large assets instead of buffering them
+# fully in memory (see scorm/zipio.py).
+[server]
+maxUploadSize = 1024

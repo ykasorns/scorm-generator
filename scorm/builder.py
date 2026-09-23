@@ -1,4 +1,4 @@
-import hashlib, io, zipfile, json
+import hashlib, tempfile, zipfile, json
 from pathlib import Path
 from typing import Callable, Dict, Optional, Tuple
 from uuid import uuid4
@@ -6,6 +6,12 @@ from uuid import uuid4
 from .models import Project
 from .validate import validate_assets_map
 from .templates import HTML_TEMPLATE, MANIFEST_TEMPLATE_SCORM12, MANIFEST_TEMPLATE_SCORM2004
+from .zipio import write_asset, AssetData
+
+# Zips smaller than this stay fully in memory (fast); larger ones spill to a
+# temp file on disk automatically, so a 300-600MB course doesn't require
+# holding the whole compressed archive in RAM at once.
+SPOOL_THRESHOLD_BYTES = 50 * 1024 * 1024
 
 _FONTS_DIR = Path(__file__).parent / "assets" / "fonts"
 
@@ -134,12 +140,20 @@ def _render_manifest(project: Project, asset_paths):
 
 def build_scorm_package(
     project: Project,
-    assets: Dict[str, bytes],
+    assets: Dict[str, AssetData],
     logo: Optional[Tuple[str, bytes]] = None,
     warn: Optional[Callable[[str], None]] = None,
-) -> bytes:
+):
     """
-    build_zip(payload, assets, logo) -> bytes
+    build_zip(payload, assets, logo) -> a seekable, seeked-to-0 binary file
+    object containing the SCORM zip (a tempfile.SpooledTemporaryFile).
+
+    Returns a file object rather than raw bytes, and `assets` values may be
+    file-like objects (e.g. a Streamlit UploadedFile) rather than bytes --
+    both let a 300-600MB video stream through in chunks instead of being
+    fully materialized in memory, which the old bytes-in/bytes-out signature
+    could not avoid. Callers can pass the result straight to
+    st.download_button(data=...) or read/seek it like any other file object.
 
     `warn`, if given, is called with a human-readable message if
     ScormSettings.suspendDataLimitGuard is on and the course is large enough
@@ -173,12 +187,12 @@ def build_scorm_package(
     index_html = _render_index_html(project)
     manifest_xml = _render_manifest(project, asset_paths)
 
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+    tmp = tempfile.SpooledTemporaryFile(max_size=SPOOL_THRESHOLD_BYTES)
+    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("index.html", index_html)
         zf.writestr("imsmanifest.xml", manifest_xml)
         for p in sorted(assets.keys()):
-            zf.writestr(p, assets[p])
+            write_asset(zf, p, assets[p])
 
-    buf.seek(0)
-    return buf.getvalue()
+    tmp.seek(0)
+    return tmp

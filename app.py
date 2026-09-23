@@ -24,6 +24,15 @@ if 'settings' not in st.session_state:
 
 st.session_state['settings'].setdefault("edition", "1.2")
 st.session_state.setdefault('editing_index', None)
+st.session_state.setdefault('item_filter', "")
+st.session_state.setdefault('item_page', 0)
+
+ITEMS_PER_PAGE = 15
+TITLE_TRUNCATE_CHARS = 80
+
+def truncate_title(text, limit=TITLE_TRUNCATE_CHARS):
+    text = text or ""
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
 logo_file = None
 st.session_state.setdefault("logo_file_obj", None)
@@ -194,16 +203,18 @@ def build_assets_and_course_data(timeline):
         if "content" in item:
             data_obj["content"] = item["content"]
 
-        # file-based items
+        # file-based items -- pass the file-like object through as-is (not
+        # .getvalue()) so a large video streams into the zip in chunks later
+        # instead of being fully duplicated in memory here.
         if item["type"] in ["video", "pdf", "image"]:
             clean_name = f"assets/res_{idx}_{item['filename']}"
-            assets_map[clean_name] = item["file"].getvalue()
+            assets_map[clean_name] = item["file"]
             data_obj["src"] = clean_name
 
         # optional subtitles (video only)
         if item["type"] == "video" and item.get("sub_file"):
             sub_name = f"assets/res_{idx}_{item['sub_filename']}"
-            assets_map[sub_name] = item["sub_file"].getvalue()
+            assets_map[sub_name] = item["sub_file"]
             data_obj["subtitleSrc"] = sub_name
 
         # quiz
@@ -226,7 +237,7 @@ with st.sidebar:
     uploaded_zip = st.file_uploader("Load project.zip", type=["zip"], key="project_zip_uploader")
 
     if uploaded_zip and not st.session_state.get("_just_loaded", False):
-        project, assets_map, logo = load_project_zip(uploaded_zip.read())
+        project, assets_map, logo = load_project_zip(uploaded_zip)
 
         st.session_state["project_obj"] = project
         st.session_state["assets_map"] = assets_map
@@ -299,13 +310,13 @@ with st.sidebar:
                 }
             )
 
-            # 5) Save -> bytes
-            project_zip_bytes = save_project_zip(project, assets_map, logo_tuple)
+            # 5) Save -> a seekable file object (streamed, not fully buffered in memory)
+            project_zip_file = save_project_zip(project, assets_map, logo_tuple)
 
             # 6) Download button
             st.download_button(
                 "⬇️ Download project.zip",
-                data=project_zip_bytes,
+                data=project_zip_file,
                 file_name="project.zip",
                 mime="application/zip",
                 use_container_width=True
@@ -359,14 +370,50 @@ editing_index = st.session_state.get('editing_index')
 if not st.session_state['timeline']:
     st.info("No content yet.")
 else:
-    for i, item in enumerate(st.session_state['timeline']):
+    def item_label(item):
+        return item.get('title') or item.get('question') or "Untitled"
+
+    if len(st.session_state['timeline']) > ITEMS_PER_PAGE:
+        st.text_input("🔍 Filter items by title/question", key='item_filter')
+
+    filter_text = st.session_state['item_filter'].strip().lower()
+    is_filtering = bool(filter_text)
+
+    all_indexed = list(enumerate(st.session_state['timeline']))
+    if is_filtering:
+        visible = [(i, item) for i, item in all_indexed if filter_text in item_label(item).lower()]
+        st.caption("⚠️ Reordering is disabled while a filter is active (neighbors in the filtered view aren't real neighbors).")
+    else:
+        visible = all_indexed
+
+    total_pages = max(1, (len(visible) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
+    st.session_state['item_page'] = min(st.session_state['item_page'], total_pages - 1)
+    page = st.session_state['item_page']
+
+    if total_pages > 1:
+        pcol1, pcol2, pcol3 = st.columns([0.15, 0.7, 0.15])
+        if pcol1.button("⬅ Prev page", disabled=(page == 0)):
+            st.session_state['item_page'] -= 1
+            st.rerun()
+        pcol2.markdown(f"<div style='text-align:center;'>Page {page + 1} of {total_pages} ({len(visible)} matching item{'s' if len(visible) != 1 else ''})</div>", unsafe_allow_html=True)
+        if pcol3.button("Next page ➡", disabled=(page >= total_pages - 1)):
+            st.session_state['item_page'] += 1
+            st.rerun()
+
+    page_slice = visible[page * ITEMS_PER_PAGE : (page + 1) * ITEMS_PER_PAGE]
+
+    if is_filtering and not page_slice:
+        st.info("No items match that filter.")
+
+    for i, item in page_slice:
         with st.container():
             col1, col2, col3, col4, col5 = st.columns([0.5, 0.1, 0.1, 0.1, 0.1])
             icon = {"video":"🎬", "quiz":"❓", "pdf":"📄", "image":"🖼️", "text":"📝"}.get(item['type'], "blob")
-            title = item.get('title') or item.get('question') or "Untitled"
+            title = truncate_title(item_label(item))
 
             locked = editing_index is not None
             is_being_edited = (editing_index == i)
+            reorder_disabled = locked or is_filtering
 
             # --- ✅ FIX RE-UPLOAD LOGIC (NO RERUN) ---
             file_status = ""
@@ -389,8 +436,8 @@ else:
                 purge_edit_keys(i)
                 st.session_state['editing_index'] = i
                 st.rerun()
-            if col3.button("⬆️", key=f"up_{i}", disabled=(i==0) or locked): move_item(i, 'up'); st.rerun()
-            if col4.button("⬇️", key=f"down_{i}", disabled=(i==len(st.session_state['timeline'])-1) or locked): move_item(i, 'down'); st.rerun()
+            if col3.button("⬆️", key=f"up_{i}", disabled=(i==0) or reorder_disabled): move_item(i, 'up'); st.rerun()
+            if col4.button("⬇️", key=f"down_{i}", disabled=(i==len(st.session_state['timeline'])-1) or reorder_disabled): move_item(i, 'down'); st.rerun()
             if col5.button("🗑️", key=f"del_{i}", disabled=locked): delete_item(i); st.rerun()
             st.divider()
 
@@ -448,13 +495,15 @@ else:
                 }
             )
 
-            # 5) Build SCORM package ZIP using new builder
-            zip_bytes = build_scorm_package(project, assets_map, logo=logo_tuple, warn=st.warning)
+            # 5) Build SCORM package ZIP using new builder (a seekable file object,
+            #    streamed rather than fully buffered, so large videos don't require
+            #    holding the whole package in memory at once)
+            zip_file = build_scorm_package(project, assets_map, logo=logo_tuple, warn=st.warning)
 
             st.success("Export Successful! ✅")
             st.download_button(
                 "⬇️ Download ZIP",
-                data=zip_bytes,
+                data=zip_file,
                 file_name=f"Course_{uuid4().hex[:8]}.zip",
                 mime="application/zip"
             )

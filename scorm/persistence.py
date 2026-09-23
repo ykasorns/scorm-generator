@@ -1,12 +1,19 @@
-import io, zipfile, json
-from typing import Dict, Optional, Tuple
+import io, zipfile, json, tempfile
+from typing import Dict, Optional, Tuple, Union, BinaryIO
 from .models import Project
+from .zipio import write_asset, AssetData
 
 PROJECT_JSON = "project.json"
 
-def save_project_zip(project, assets_map, logo_tuple=None):
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+# Zips smaller than this stay fully in memory (fast); larger ones spill to a
+# temp file on disk automatically, so a 300-600MB course doesn't require
+# holding the whole compressed archive in RAM at once.
+SPOOL_THRESHOLD_BYTES = 50 * 1024 * 1024
+
+
+def save_project_zip(project, assets_map: Dict[str, AssetData], logo_tuple=None):
+    tmp = tempfile.SpooledTemporaryFile(max_size=SPOOL_THRESHOLD_BYTES)
+    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as zf:
 
         # ✅ สำคัญมาก: บังคับ snake_case
         project_dict = project.model_dump(by_alias=False)
@@ -14,18 +21,18 @@ def save_project_zip(project, assets_map, logo_tuple=None):
         zf.writestr(PROJECT_JSON, json.dumps(project_dict, ensure_ascii=False, indent=2))
 
         for path, data in assets_map.items():
-            zf.writestr(path, data)
+            write_asset(zf, path, data)
 
         if logo_tuple:
             lp, lb = logo_tuple
-            zf.writestr(lp, lb)
+            write_asset(zf, lp, lb)
 
-    buf.seek(0)
-    return buf.getvalue()
+    tmp.seek(0)
+    return tmp
 
 
-def load_project_zip(zip_bytes: bytes):
-    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
+def load_project_zip(source: Union[bytes, BinaryIO]):
+    with zipfile.ZipFile(source, "r") as zf:
         project_data = json.loads(zf.read(PROJECT_JSON).decode("utf-8"))
 
         project = Project.model_validate(project_data)  # ✅ validate dict ตรงๆ

@@ -1,5 +1,6 @@
 import os, re
 from typing import Dict
+from .zipio import AssetData
 
 SAFE_NAME = re.compile(r"[^a-zA-Z0-9._-]+")
 
@@ -14,7 +15,7 @@ def safe_relpath(path: str) -> str:
         raise ValueError("Invalid path traversal")
     return path
 
-def validate_assets_map(assets: Dict[str, bytes]) -> Dict[str, bytes]:
+def validate_assets_map(assets: Dict[str, AssetData]) -> Dict[str, AssetData]:
     cleaned = {}
     for k, v in assets.items():
         kp = safe_relpath(k)
