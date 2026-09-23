@@ -84,12 +84,13 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
 
         body {{
             font-family: 'Sarabun', sans-serif;
-            background-color: #f4f6f8; 
-            margin: 0; 
-            display: flex; 
-            min-height: 100vh; 
+            background-color: #f4f6f8;
+            {bg_image_css}
+            margin: 0;
+            display: flex;
+            min-height: 100vh;
             height: auto;
-            overflow-y: auto; 
+            overflow-y: auto;
         }}
         
         /* SIDEBAR */
@@ -215,15 +216,15 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }}
 
 
-        .content-area {{ 
-            flex: 1; 
-            padding: 20px; 
+        .content-area {{
+            flex: 1;
+            padding: 20px;
             overflow: hidden; /* Prevent double scrollbars */
-            display: flex; 
+            display: flex;
             flex-direction: column;
-            justify-content: center; 
-            align-items: center; 
-            background-color: #f4f6f8;
+            justify-content: center;
+            align-items: center;
+            background-color: transparent; /* lets body's background-color/-image show through */
             min-height: 0;
         }}
         .content-area.final-card-mode {{

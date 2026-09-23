@@ -65,7 +65,7 @@ def _render_index_html(project: Project) -> str:
     """
     Render index.html using YOUR HTML_TEMPLATE placeholders:
       {course_title}, {theme_color}, {passing_score}, {logo_html}, {logo_html_large},
-      {course_data_json}, {has_quiz}, {scorm_edition}, {course_fingerprint}
+      {course_data_json}, {has_quiz}, {scorm_edition}, {course_fingerprint}, {bg_image_css}
     """
     settings = project.ui_state.get("settings", {})
     js_course_data = project.ui_state.get("js_course_data", [])
@@ -91,6 +91,21 @@ def _render_index_html(project: Project) -> str:
             f'<img src="{lp}" style="height:60px; display:block;"></div>'
         )
 
+    # background image support -- background-size:cover + background-position:center
+    # is what makes ONE uploaded image work across any screen size: the browser scales
+    # it to always fill the element, cropping overflow instead of stretching it, and
+    # keeps the center anchored so cropping doesn't cut out the important part.
+    # background-attachment is deliberately left at the default ("scroll"), not "fixed"
+    # -- "fixed" backgrounds are unreliable/janky on iOS Safari.
+    bg_image_css = ""
+    bg_image_meta = project.ui_state.get("bg_image_meta")
+    if bg_image_meta and bg_image_meta.get("path"):
+        bp = bg_image_meta["path"]
+        bg_image_css = (
+            f"background-image: url('{bp}'); background-size: cover; "
+            f"background-position: center; background-repeat: no-repeat;"
+        )
+
     # IMPORTANT: js_course_data must be JSON array of items like your old js_course_data
     course_data_json = json.dumps(js_course_data, ensure_ascii=False)
     scorm_edition = json.dumps(project.scorm.edition)
@@ -106,7 +121,8 @@ def _render_index_html(project: Project) -> str:
         course_data_json=course_data_json,
         has_quiz=has_quiz,
         scorm_edition=scorm_edition,
-        course_fingerprint=course_fingerprint
+        course_fingerprint=course_fingerprint,
+        bg_image_css=bg_image_css
     )
 
 
@@ -142,6 +158,7 @@ def build_scorm_package(
     project: Project,
     assets: Dict[str, AssetData],
     logo: Optional[Tuple[str, bytes]] = None,
+    bg_image: Optional[Tuple[str, bytes]] = None,
     warn: Optional[Callable[[str], None]] = None,
 ):
     """
@@ -170,6 +187,12 @@ def build_scorm_package(
         lp, lb = logo
         assets[lp] = lb
         project.ui_state["logo_meta"] = {"path": lp}
+
+    # attach background image into zip assets and store path so HTML can reference it
+    if bg_image:
+        bp, bb = bg_image
+        assets[bp] = bb
+        project.ui_state["bg_image_meta"] = {"path": bp}
 
     if warn and project.scorm.suspendDataLimitGuard:
         item_count = len(project.ui_state.get("js_course_data", []))

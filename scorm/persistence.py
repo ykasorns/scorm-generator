@@ -11,7 +11,7 @@ PROJECT_JSON = "project.json"
 SPOOL_THRESHOLD_BYTES = 50 * 1024 * 1024
 
 
-def save_project_zip(project, assets_map: Dict[str, AssetData], logo_tuple=None):
+def save_project_zip(project, assets_map: Dict[str, AssetData], logo_tuple=None, bg_image_tuple=None):
     tmp = tempfile.SpooledTemporaryFile(max_size=SPOOL_THRESHOLD_BYTES)
     with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as zf:
 
@@ -27,6 +27,10 @@ def save_project_zip(project, assets_map: Dict[str, AssetData], logo_tuple=None)
             lp, lb = logo_tuple
             write_asset(zf, lp, lb)
 
+        if bg_image_tuple:
+            bp, bb = bg_image_tuple
+            write_asset(zf, bp, bb)
+
     tmp.seek(0)
     return tmp
 
@@ -40,9 +44,11 @@ def load_project_zip(source: Union[bytes, BinaryIO]):
         assets_map = {p: zf.read(p) for p in zf.namelist() if p.startswith("assets/")}
 
         logo_tuple = None
+        bg_image_tuple = None
         for p in zf.namelist():
-            if p.startswith("logo/"):
+            if p.startswith("logo/") and logo_tuple is None:
                 logo_tuple = (p, zf.read(p))
-                break
+            elif p.startswith("background/") and bg_image_tuple is None:
+                bg_image_tuple = (p, zf.read(p))
 
-    return project, assets_map, logo_tuple
+    return project, assets_map, logo_tuple, bg_image_tuple

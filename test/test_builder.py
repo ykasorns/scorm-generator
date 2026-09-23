@@ -67,6 +67,24 @@ def test_suspend_data_budget_warning_respects_guard_toggle():
     build_scorm_package(project, {}, warn=warnings.append)
     assert warnings == []
 
+def test_background_image_css_is_responsive_and_bundled():
+    z = build_scorm_package(demo_project("1.2"), {}, bg_image=("background/office.png", b"fake-png-bytes"))
+    zf = zipfile.ZipFile(z)
+    names = set(zf.namelist())
+    assert "background/office.png" in names
+    html = zf.read("index.html").decode("utf-8")
+    assert "background-image: url('background/office.png')" in html
+    assert "background-size: cover" in html
+    assert "background-position: center" in html
+    # "fixed" attachment is unreliable on iOS Safari -- must not be set
+    assert "background-attachment: fixed" not in html
+
+def test_no_background_image_leaves_css_empty():
+    z = build_scorm_package(demo_project("1.2"), {})
+    zf = zipfile.ZipFile(z)
+    html = zf.read("index.html").decode("utf-8")
+    assert "background-image" not in html
+
 class _ChunkOnlyReader:
     """
     File-like stub standing in for a large Streamlit UploadedFile. Raises if

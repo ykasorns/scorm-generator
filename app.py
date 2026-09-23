@@ -36,6 +36,8 @@ def truncate_title(text, limit=TITLE_TRUNCATE_CHARS):
 
 logo_file = None
 st.session_state.setdefault("logo_file_obj", None)
+bg_image_file = None
+st.session_state.setdefault("bg_image_file_obj", None)
 
 class FakeUploadFile:
     def __init__(self, name: str, data: bytes):
@@ -237,11 +239,12 @@ with st.sidebar:
     uploaded_zip = st.file_uploader("Load project.zip", type=["zip"], key="project_zip_uploader")
 
     if uploaded_zip and not st.session_state.get("_just_loaded", False):
-        project, assets_map, logo = load_project_zip(uploaded_zip)
+        project, assets_map, logo, bg_image = load_project_zip(uploaded_zip)
 
         st.session_state["project_obj"] = project
         st.session_state["assets_map"] = assets_map
         st.session_state["logo_tuple"] = logo
+        st.session_state["bg_image_tuple"] = bg_image
 
         st.session_state["settings"] = project.ui_state.get("settings", st.session_state.get("settings", {}))
         st.session_state["timeline"]  = project.ui_state.get("timeline", st.session_state.get("timeline", []))
@@ -275,6 +278,12 @@ with st.sidebar:
             logo_file_obj = st.session_state.get("logo_file_obj")
             if logo_file_obj:
                 logo_tuple = (f"logo/{logo_file_obj.name}", logo_file_obj.getvalue())
+
+        # 2b) background image tuple
+            bg_image_tuple = None
+            bg_image_file_obj = st.session_state.get("bg_image_file_obj")
+            if bg_image_file_obj:
+                bg_image_tuple = (f"background/{bg_image_file_obj.name}", bg_image_file_obj.getvalue())
 
         # 3) edition
             edition = st.session_state["settings"].get("edition", "1.2")
@@ -311,7 +320,7 @@ with st.sidebar:
             )
 
             # 5) Save -> a seekable file object (streamed, not fully buffered in memory)
-            project_zip_file = save_project_zip(project, assets_map, logo_tuple)
+            project_zip_file = save_project_zip(project, assets_map, logo_tuple, bg_image_tuple)
 
             # 6) Download button
             st.download_button(
@@ -336,6 +345,10 @@ with st.sidebar:
         )
         logo_file = st.file_uploader("Logo (PNG/JPG)", type=['png', 'jpg'], key="logo_uploader")
         st.session_state["logo_file_obj"] = logo_file
+        bg_image_file = st.file_uploader("Background Image (optional, PNG/JPG)", type=['png', 'jpg'], key="bg_image_uploader")
+        st.session_state["bg_image_file_obj"] = bg_image_file
+        if bg_image_file:
+            st.caption("Scales to fill the screen on any device (desktop or mobile) and crops to center — no need to upload multiple sizes.")
 
     st.divider()
     
@@ -461,6 +474,11 @@ else:
             if logo_file:
                 logo_tuple = (f"logo/{logo_file.name}", logo_file.getvalue())
 
+            # 2b) background image -> store in /background
+            bg_image_tuple = None
+            if bg_image_file:
+                bg_image_tuple = (f"background/{bg_image_file.name}", bg_image_file.getvalue())
+
             # 3) edition (from settings)
             edition = st.session_state["settings"].get("edition", "1.2")
 
@@ -498,7 +516,7 @@ else:
             # 5) Build SCORM package ZIP using new builder (a seekable file object,
             #    streamed rather than fully buffered, so large videos don't require
             #    holding the whole package in memory at once)
-            zip_file = build_scorm_package(project, assets_map, logo=logo_tuple, warn=st.warning)
+            zip_file = build_scorm_package(project, assets_map, logo=logo_tuple, bg_image=bg_image_tuple, warn=st.warning)
 
             st.success("Export Successful! ✅")
             st.download_button(
