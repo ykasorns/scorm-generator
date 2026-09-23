@@ -1,4 +1,8 @@
-# Auto-generated from scorm2.py
+# Hand-maintained SCORM runtime template (SCORM 1.2 + 2004 support).
+# Originally generated from scorm2.py, but has since diverged with manual
+# fixes (sidebar nav, SCORM 2004 API support). Do NOT regenerate this file
+# via extract_from_scorm2.py -- that would silently overwrite those fixes
+# with the stale scorm2.py copy. See extract_from_scorm2.py's --force guard.
 
 HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="en">
@@ -86,7 +90,9 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             color: white;
         }}
         .menu-item.completed .status-icon {{ background-color: #28a745; border-color: #28a745; }}
-        
+        .menu-item.locked {{ opacity: 0.5; cursor: not-allowed; }}
+        .menu-item.locked:hover {{ background-color: transparent; }}
+
         /* MAIN CONTENT */
         .main-wrapper {{ flex: 1; display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; }}
         .header {{ 
@@ -527,20 +533,54 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     </style>
     <script>
         var scorm = null;
-        function findAPI(win) {{ while ((win.API == null) && (win.parent != null) && (win.parent != win)) {{ win = win.parent; }} return win.API; }}
+        var scormProtocol = null; // "1.2" or "2004" -- whichever API was actually found
+        var scormTerminated = false;
+        var scormEdition = {scorm_edition};
+
+        function findAPIInWindow(win, propName) {{
+            var attempts = 0;
+            while (win[propName] == null && win.parent != null && win.parent != win && attempts < 500) {{
+                win = win.parent;
+                attempts++;
+            }}
+            return win[propName];
+        }}
+        function findAPI(propName) {{
+            // Most LMSs load the SCO in an iframe (parent chain), but this player also
+            // supports launching in a new window (ScormSettings.launchInNewWindow), where
+            // the API instead lives on window.opener.
+            var api = findAPIInWindow(window, propName);
+            if (!api && window.opener != null) {{
+                api = findAPIInWindow(window.opener, propName);
+            }}
+            return api;
+        }}
         function initSCORM() {{
-            var api = findAPI(window);
-            if (api) {{
-                scorm = api;
+            var api2004 = findAPI("API_1484_11");
+            var api12 = findAPI("API");
+            if (scormEdition === "2004" && api2004) {{ scorm = api2004; scormProtocol = "2004"; }}
+            else if (scormEdition !== "2004" && api12) {{ scorm = api12; scormProtocol = "1.2"; }}
+            else if (api2004) {{ scorm = api2004; scormProtocol = "2004"; }}
+            else if (api12) {{ scorm = api12; scormProtocol = "1.2"; }}
+            if (!scorm) return;
+
+            if (scormProtocol === "2004") {{
+                scorm.Initialize("");
+                var status = scorm.GetValue("cmi.completion_status");
+                if (status === "not attempted" || status === "unknown" || status === "") {{
+                    scorm.SetValue("cmi.completion_status", "incomplete");
+                    scorm.Commit("");
+                }}
+            }} else {{
                 scorm.LMSInitialize("");
-                var status = scorm.LMSGetValue("cmi.core.lesson_status");
-                if (status == "not attempted") {{
+                var status12 = scorm.LMSGetValue("cmi.core.lesson_status");
+                if (status12 == "not attempted") {{
                     scorm.LMSSetValue("cmi.core.lesson_status", "incomplete");
                     scorm.LMSCommit("");
                 }}
             }}
         }}
-        
+
         function toggleSidebar() {{
             var sb = document.getElementById('sidebar');
             if (window.innerWidth <= 768) {{
@@ -550,12 +590,24 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             }}
         }}
         function sendScore(score, status) {{
-            if (scorm) {{
+            if (!scorm || scormTerminated) return;
+            if (scormProtocol === "2004") {{
+                var success = (status === "passed") ? "passed" : (status === "failed") ? "failed" : "unknown";
+                scorm.SetValue("cmi.completion_status", "completed");
+                scorm.SetValue("cmi.success_status", success);
+                scorm.SetValue("cmi.score.raw", score);
+                scorm.SetValue("cmi.score.min", "0");
+                scorm.SetValue("cmi.score.max", "100");
+                scorm.SetValue("cmi.score.scaled", String(score / 100));
+                scorm.Commit("");
+                scorm.Terminate("");
+            }} else {{
                 scorm.LMSSetValue("cmi.core.score.raw", score);
                 scorm.LMSSetValue("cmi.core.lesson_status", status);
                 scorm.LMSCommit("");
                 scorm.LMSFinish("");
             }}
+            scormTerminated = true;
         }}
 
         var courseData = {course_data_json}; 
@@ -584,15 +636,16 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             var list = document.getElementById('menu-list');
             list.innerHTML = '';
             courseData.forEach((item, index) => {{
-                if (item.type !== 'video') return;
+                var label = item.title || item.question || ('Item ' + (index + 1));
+                var unlocked = progressStatus[index] || index === currentStep || (index > 0 && progressStatus[index-1]);
                 var li = document.createElement('li');
-                li.className = 'menu-item';
+                li.className = 'menu-item' + (unlocked ? '' : ' locked');
                 if (index === currentStep) li.classList.add('active');
                 if (progressStatus[index]) li.classList.add('completed');
-                var iconHTML = progressStatus[index] ? '✔' : '';
-                li.innerHTML = `<span>${{item.title}}</span> <div class="status-icon">${{iconHTML}}</div>`;
+                var iconHTML = progressStatus[index] ? '✔' : (unlocked ? '' : '🔒');
+                li.innerHTML = `<span>${{label}}</span> <div class="status-icon">${{iconHTML}}</div>`;
                 li.onclick = function() {{
-                    if (progressStatus[index] || index === currentStep || (index > 0 && progressStatus[index-1])) {{
+                    if (unlocked) {{
                         currentStep = index; renderSidebar(); renderStep();
                     }}
                 }};

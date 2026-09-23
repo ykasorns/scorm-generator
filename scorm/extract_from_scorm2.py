@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import sys
 
 def extract_triple_quote(src: str, varname: str) -> str:
     m = re.search(rf"{varname}\s*=\s*\"\"\"(.*?)\"\"\"", src, re.S)
@@ -51,6 +52,14 @@ def scorm12_to_scorm2004(manifest_12: str) -> str:
     return m
 
 def main():
+    if "--force" not in sys.argv:
+        raise SystemExit(
+            "scorm/templates.py is now hand-maintained (SCORM 1.2 + 2004 "
+            "runtime fixes live there, not in scorm2.py). Regenerating it "
+            "from scorm2.py would silently overwrite those fixes. "
+            "Re-run with --force if you really intend to discard them."
+        )
+
     # adjust path if needed
     src_path = Path("scorm2.py")
     if not src_path.exists():

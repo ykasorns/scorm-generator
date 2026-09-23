@@ -16,7 +16,7 @@ def _render_index_html(project: Project) -> str:
     """
     Render index.html using YOUR HTML_TEMPLATE placeholders:
       {course_title}, {theme_color}, {passing_score}, {logo_html}, {logo_html_large},
-      {course_data_json}, {has_quiz}
+      {course_data_json}, {has_quiz}, {scorm_edition}
     """
     settings = project.ui_state.get("settings", {})
     js_course_data = project.ui_state.get("js_course_data", [])
@@ -44,6 +44,7 @@ def _render_index_html(project: Project) -> str:
 
     # IMPORTANT: js_course_data must be JSON array of items like your old js_course_data
     course_data_json = json.dumps(js_course_data, ensure_ascii=False)
+    scorm_edition = json.dumps(project.scorm.edition)
 
     # Use .format exactly like your original HTML_TEMPLATE
     return HTML_TEMPLATE.format(
@@ -53,7 +54,8 @@ def _render_index_html(project: Project) -> str:
         logo_html=logo_html,
         logo_html_large=logo_html_large,
         course_data_json=course_data_json,
-        has_quiz=has_quiz
+        has_quiz=has_quiz,
+        scorm_edition=scorm_edition
     )
 
 
