@@ -1,10 +1,34 @@
-import io, zipfile, json
-from typing import Dict, Optional, Tuple
+import hashlib, io, zipfile, json
+from pathlib import Path
+from typing import Callable, Dict, Optional, Tuple
 from uuid import uuid4
 
 from .models import Project
 from .validate import validate_assets_map
 from .templates import HTML_TEMPLATE, MANIFEST_TEMPLATE_SCORM12, MANIFEST_TEMPLATE_SCORM2004
+
+_FONTS_DIR = Path(__file__).parent / "assets" / "fonts"
+
+
+def _bundled_font_assets() -> Dict[str, bytes]:
+    """
+    Self-hosted Thai-supporting webfont (Sarabun, OFL-licensed -- see
+    scorm/assets/fonts/OFL.txt), shipped inside every export at fonts/*.woff2
+    so the course renders correctly on an intranet with no internet egress
+    and displays Thai script, which the CDN-hosted "Inter" font this replaced
+    could not.
+    """
+    return {
+        f"fonts/{p.name}": p.read_bytes()
+        for p in sorted(_FONTS_DIR.glob("*.woff2"))
+    }
+
+# Worst-case cmi.suspend_data resume-payload length for an N-item course
+# (see scorm/templates.py's persistProgress(): "v|fp|cs|ps|qr", ps/qr are one
+# char per item). Must stay well under SCORM 1.2's 4096-char cap.
+SUSPEND_DATA_PER_ITEM_CHARS = 2
+SUSPEND_DATA_FIXED_OVERHEAD_CHARS = 19
+SUSPEND_DATA_WARN_THRESHOLD_CHARS = 3500
 
 
 def _resource_files_xml(asset_paths):
@@ -12,11 +36,30 @@ def _resource_files_xml(asset_paths):
     return "".join([f'<file href="{p}"/>' for p in sorted(asset_paths)])
 
 
+def _compute_course_fingerprint(js_course_data) -> str:
+    """
+    Structural fingerprint used by the exported player to detect when a
+    learner's resume payload no longer matches the course (items added,
+    removed, or reordered). Deliberately excludes title/question/option TEXT
+    so routine copy edits don't reset in-flight learners -- only shape
+    (item count, per-item type, and quiz option-count) is hashed.
+    """
+    parts = []
+    for item in js_course_data:
+        item_type = item.get("type", "")
+        if item_type == "quiz":
+            parts.append(f"{item_type}:{len(item.get('options', []))}")
+        else:
+            parts.append(item_type)
+    shape = ",".join(parts)
+    return hashlib.sha256(shape.encode("utf-8")).hexdigest()[:8]
+
+
 def _render_index_html(project: Project) -> str:
     """
     Render index.html using YOUR HTML_TEMPLATE placeholders:
       {course_title}, {theme_color}, {passing_score}, {logo_html}, {logo_html_large},
-      {course_data_json}, {has_quiz}, {scorm_edition}
+      {course_data_json}, {has_quiz}, {scorm_edition}, {course_fingerprint}
     """
     settings = project.ui_state.get("settings", {})
     js_course_data = project.ui_state.get("js_course_data", [])
@@ -45,6 +88,7 @@ def _render_index_html(project: Project) -> str:
     # IMPORTANT: js_course_data must be JSON array of items like your old js_course_data
     course_data_json = json.dumps(js_course_data, ensure_ascii=False)
     scorm_edition = json.dumps(project.scorm.edition)
+    course_fingerprint = json.dumps(_compute_course_fingerprint(js_course_data))
 
     # Use .format exactly like your original HTML_TEMPLATE
     return HTML_TEMPLATE.format(
@@ -55,7 +99,8 @@ def _render_index_html(project: Project) -> str:
         logo_html_large=logo_html_large,
         course_data_json=course_data_json,
         has_quiz=has_quiz,
-        scorm_edition=scorm_edition
+        scorm_edition=scorm_edition,
+        course_fingerprint=course_fingerprint
     )
 
 
@@ -91,17 +136,37 @@ def build_scorm_package(
     project: Project,
     assets: Dict[str, bytes],
     logo: Optional[Tuple[str, bytes]] = None,
+    warn: Optional[Callable[[str], None]] = None,
 ) -> bytes:
     """
     build_zip(payload, assets, logo) -> bytes
+
+    `warn`, if given, is called with a human-readable message if
+    ScormSettings.suspendDataLimitGuard is on and the course is large enough
+    that the resume-progress payload (see scorm/templates.py's
+    persistProgress()) could approach SCORM 1.2's 4096-char suspend_data cap.
+    This module has no UI dependency, so the caller decides how to surface it
+    (e.g. app.py rendering it via st.warning).
     """
     assets = validate_assets_map(assets)
+    assets.update(_bundled_font_assets())
 
     # attach logo into zip assets and store path so HTML can reference it
     if logo:
         lp, lb = logo
         assets[lp] = lb
         project.ui_state["logo_meta"] = {"path": lp}
+
+    if warn and project.scorm.suspendDataLimitGuard:
+        item_count = len(project.ui_state.get("js_course_data", []))
+        estimated_chars = SUSPEND_DATA_PER_ITEM_CHARS * item_count + SUSPEND_DATA_FIXED_OVERHEAD_CHARS
+        if estimated_chars > SUSPEND_DATA_WARN_THRESHOLD_CHARS:
+            warn(
+                f"This course has {item_count} items; the estimated resume-progress "
+                f"payload (~{estimated_chars} chars) is approaching the SCORM 1.2 "
+                f"suspend_data limit (4096 chars). Consider splitting into multiple "
+                f"SCOs/courses."
+            )
 
     asset_paths = list(assets.keys())
 

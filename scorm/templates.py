@@ -11,12 +11,79 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{course_title}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
-        
+        /* Self-hosted (bundled in this package's fonts/ folder, not a CDN @import) so the
+           course renders correctly on an intranet with no internet egress, and supports
+           Thai script, which the original Google-Fonts "Inter" import did not. Licensed
+           under the SIL Open Font License -- see fonts/OFL.txt in this package. */
+        @font-face {{
+            font-family: 'Sarabun';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('fonts/sarabun-thai-400.woff2') format('woff2');
+            unicode-range: U+0E01-0E5B, U+200C-200D, U+25CC;
+        }}
+        @font-face {{
+            font-family: 'Sarabun';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('fonts/sarabun-latin-400.woff2') format('woff2');
+            unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
+        }}
+        @font-face {{
+            font-family: 'Sarabun';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('fonts/sarabun-thai-600.woff2') format('woff2');
+            unicode-range: U+0E01-0E5B, U+200C-200D, U+25CC;
+        }}
+        @font-face {{
+            font-family: 'Sarabun';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('fonts/sarabun-latin-600.woff2') format('woff2');
+            unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
+        }}
+        @font-face {{
+            font-family: 'Sarabun';
+            font-style: normal;
+            font-weight: 700;
+            font-display: swap;
+            src: url('fonts/sarabun-thai-700.woff2') format('woff2');
+            unicode-range: U+0E01-0E5B, U+200C-200D, U+25CC;
+        }}
+        @font-face {{
+            font-family: 'Sarabun';
+            font-style: normal;
+            font-weight: 700;
+            font-display: swap;
+            src: url('fonts/sarabun-latin-700.woff2') format('woff2');
+            unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
+        }}
+        @font-face {{
+            font-family: 'Sarabun';
+            font-style: normal;
+            font-weight: 800;
+            font-display: swap;
+            src: url('fonts/sarabun-thai-800.woff2') format('woff2');
+            unicode-range: U+0E01-0E5B, U+200C-200D, U+25CC;
+        }}
+        @font-face {{
+            font-family: 'Sarabun';
+            font-style: normal;
+            font-weight: 800;
+            font-display: swap;
+            src: url('fonts/sarabun-latin-800.woff2') format('woff2');
+            unicode-range: U+0000-00FF, U+2000-206F, U+20AC, U+2122;
+        }}
+
         * {{ box-sizing: border-box; }}
-        
-        body {{ 
-            font-family: 'Inter', sans-serif; 
+
+        body {{
+            font-family: 'Sarabun', sans-serif;
             background-color: #f4f6f8; 
             margin: 0; 
             display: flex; 
@@ -108,8 +175,30 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }}
         .header-left {{ display: flex; align-items: center; }}
         .header h1 {{ margin: 0; font-size: 18px; font-weight: 600; }}
+        .header-right {{ display: flex; align-items: center; gap: 12px; }}
         .header-right img {{ height: 35px; width: auto; max-width: 150px; object-fit: contain; background: rgba(255,255,255,0.95); padding: 5px; border-radius: 4px; }}
-        
+        .save-exit-btn {{
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.4);
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }}
+        .save-exit-btn:hover {{ background: rgba(255,255,255,0.25); }}
+        .resume-notice {{
+            display: none;
+            background: #fff3cd;
+            color: #664d03;
+            padding: 10px 16px;
+            font-size: 0.85rem;
+            text-align: center;
+            flex-shrink: 0;
+        }}
+        .resume-notice.show {{ display: block; }}
+
         @media (max-width: 768px) {{
             .sidebar {{
                 position: absolute;
@@ -177,7 +266,19 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }}
         .content-img {{ border: none; background: transparent; }}
         .pdf-frame {{ border: 1px solid #ddd; background: white; }}
-        
+        .pdf-open-link {{
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: {theme_color};
+            color: white;
+            text-decoration: none;
+            font-size: 0.8rem;
+            padding: 6px 12px;
+            border-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }}
+
         /* Custom Video Player (CSS Grid for precise control) */
         .video-container {{
             width: 100%;
@@ -248,7 +349,17 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             margin: 0;
             min-height: 0;
         }}
-        
+        /* Sized for req. 4.6.6: readable on a 5"+ screen at an 18:9 aspect ratio. */
+        video::cue {{
+            font-family: 'Sarabun', sans-serif;
+            font-size: 1.1rem;
+            background: rgba(0,0,0,0.75);
+            padding: 0.2em 0.4em;
+        }}
+        @media (max-width: 480px) {{
+            video::cue {{ font-size: 1.3rem; }}
+        }}
+
         .result-content {{ 
             display: flex;
             flex-direction: column;
@@ -534,8 +645,11 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
     <script>
         var scorm = null;
         var scormProtocol = null; // "1.2" or "2004" -- whichever API was actually found
-        var scormTerminated = false;
+        var scormCompleted = false; // true once sendScore() has actually run (guards re-entry into scoring)
+        var scormTerminated = false; // true once Terminate()/LMSFinish() has actually fired (guards ALL further RTE calls)
         var scormEdition = {scorm_edition};
+        var courseFingerprint = {course_fingerprint};
+        var courseWasReset = false; // true if a resume payload existed but failed validation (shown as a notice)
 
         function findAPIInWindow(win, propName) {{
             var attempts = 0;
@@ -579,7 +693,84 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                     scorm.LMSCommit("");
                 }}
             }}
+
+            restoreProgress();
         }}
+
+        // cmi.suspend_data is the same field path in both SCORM 1.2 and 2004 -- only
+        // entry/exit/lesson_location field NAMES differ by edition (handled elsewhere).
+        // Deliberately does NOT gate on cmi.entry/cmi.core.entry: some real LMSs misreport
+        // it, so the only trustworthy gate is "valid, fingerprint-matching data exists".
+        function restoreProgress() {{
+            if (!scorm) return;
+            var raw = (scormProtocol === "2004")
+                ? scorm.GetValue("cmi.suspend_data")
+                : scorm.LMSGetValue("cmi.suspend_data");
+            if (!raw) return;
+
+            var parts = raw.split("|");
+            if (parts.length !== 5) {{ courseWasReset = true; return; }}
+            var v = parts[0], fp = parts[1], cs = parseInt(parts[2], 10), ps = parts[3], qr = parts[4];
+
+            if (v !== "1") {{ courseWasReset = true; return; }}
+            if (fp !== courseFingerprint) {{ courseWasReset = true; return; }}
+            if (isNaN(cs) || cs < 0 || cs > courseData.length) {{ courseWasReset = true; return; }}
+            if (ps.length !== courseData.length || qr.length !== courseData.length) {{ courseWasReset = true; return; }}
+            if (!/^[01]+$/.test(ps) || !/^[01]+$/.test(qr)) {{ courseWasReset = true; return; }}
+
+            currentStep = cs;
+            progressStatus = ps.split("").map(function(c) {{ return c === "1"; }});
+            quizResults = qr.split("").map(function(c) {{ return c === "1" ? 1 : 0; }});
+        }}
+
+        // Builds and commits the resume payload. Called on every step transition and as a
+        // safety net on tab backgrounding/unload. No-ops once the session has been
+        // genuinely terminated so it can never race the final Terminate()/LMSFinish() call.
+        function persistProgress(exitValue) {{
+            if (!scorm || scormTerminated) return;
+            var ps = progressStatus.map(function(b) {{ return b ? "1" : "0"; }}).join("");
+            var qr = quizResults.map(function(n) {{ return n ? "1" : "0"; }}).join("");
+            var payload = ["1", courseFingerprint, String(currentStep), ps, qr].join("|");
+
+            if (scormProtocol === "2004") {{
+                scorm.SetValue("cmi.suspend_data", payload);
+                scorm.SetValue("cmi.location", String(currentStep));
+                if (exitValue !== undefined) {{ scorm.SetValue("cmi.exit", exitValue); }}
+                scorm.Commit("");
+            }} else {{
+                scorm.LMSSetValue("cmi.suspend_data", payload);
+                scorm.LMSSetValue("cmi.core.lesson_location", String(currentStep));
+                if (exitValue !== undefined) {{ scorm.LMSSetValue("cmi.core.exit", exitValue); }}
+                scorm.LMSCommit("");
+            }}
+        }}
+
+        function saveAndExit() {{
+            persistProgress("suspend");
+            var btn = document.getElementById('save-exit-btn');
+            if (btn) {{
+                var original = btn.innerHTML;
+                btn.innerHTML = '✅ Saved';
+                setTimeout(function() {{ btn.innerHTML = original; }}, 1500);
+            }}
+        }}
+
+        // Mobile-critical: beforeunload is unreliable on iOS Safari and background tab-kill
+        // never fires it at all, so visibilitychange is the primary signal, with pagehide and
+        // beforeunload as fallbacks. None of these call Terminate()/LMSFinish() -- the learner
+        // may simply be backgrounding the tab and coming right back, and terminating would kill
+        // the API session (most LMS runtimes don't tolerate re-Initialize mid-session).
+        document.addEventListener('visibilitychange', function() {{
+            if (document.visibilityState === 'hidden') {{ persistProgress('suspend'); }}
+        }});
+        window.addEventListener('pagehide', function(event) {{
+            persistProgress('suspend');
+            if (!event.persisted && scorm && !scormTerminated) {{
+                if (scormProtocol === "2004") {{ scorm.Terminate(""); }} else {{ scorm.LMSFinish(""); }}
+                scormTerminated = true;
+            }}
+        }});
+        window.addEventListener('beforeunload', function() {{ persistProgress('suspend'); }});
 
         function toggleSidebar() {{
             var sb = document.getElementById('sidebar');
@@ -590,7 +781,8 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             }}
         }}
         function sendScore(score, status) {{
-            if (!scorm || scormTerminated) return;
+            if (!scorm || scormCompleted) return;
+            scormCompleted = true;
             if (scormProtocol === "2004") {{
                 var success = (status === "passed") ? "passed" : (status === "failed") ? "failed" : "unknown";
                 scorm.SetValue("cmi.completion_status", "completed");
@@ -599,11 +791,13 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 scorm.SetValue("cmi.score.min", "0");
                 scorm.SetValue("cmi.score.max", "100");
                 scorm.SetValue("cmi.score.scaled", String(score / 100));
+                scorm.SetValue("cmi.exit", "normal");
                 scorm.Commit("");
                 scorm.Terminate("");
             }} else {{
                 scorm.LMSSetValue("cmi.core.score.raw", score);
                 scorm.LMSSetValue("cmi.core.lesson_status", status);
+                scorm.LMSSetValue("cmi.core.exit", "");
                 scorm.LMSCommit("");
                 scorm.LMSFinish("");
             }}
@@ -625,6 +819,13 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             calculateMaxScore();
             renderSidebar();
             renderStep();
+            if (courseWasReset) {{
+                var notice = document.getElementById('resume-notice');
+                if (notice) {{
+                    notice.textContent = 'This course was updated since your last visit — starting from the beginning.';
+                    notice.classList.add('show');
+                }}
+            }}
             document.addEventListener('contextmenu', event => event.preventDefault());
         }};
 
@@ -646,7 +847,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 li.innerHTML = `<span>${{label}}</span> <div class="status-icon">${{iconHTML}}</div>`;
                 li.onclick = function() {{
                     if (unlocked) {{
-                        currentStep = index; renderSidebar(); renderStep();
+                        currentStep = index; renderSidebar(); renderStep(); persistProgress();
                     }}
                 }};
                 list.appendChild(li);
@@ -656,6 +857,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         function markCurrentStepComplete() {{
             progressStatus[currentStep] = true;
             renderSidebar();
+            persistProgress();
         }}
 
         function renderStep() {{
@@ -686,12 +888,13 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                     ${{titleHTML}}
                     <div class="video-container">
                         <div class="media-wrapper">
-                            <video id="player" controlsList="nodownload" autoplay>
+                            <video id="player" controlsList="nodownload" autoplay playsinline webkit-playsinline>
                                 <source src="${{item.src}}" type="video/mp4">
+                                ${{item.subtitleSrc ? `<track kind="subtitles" src="${{item.subtitleSrc}}" default>` : ''}}
                             </video>
                         </div>
                         <div class="custom-controls">
-                            <button class="control-btn" id="playPauseBtn" onclick="togglePlay()">⏸</button>
+                            <button class="control-btn" id="playPauseBtn" onclick="togglePlay()">▶</button>
                             <span class="time-display"><span id="currentTime">0:00</span> / <span id="duration">0:00</span></span>
                             <input type="range" class="seek-bar" id="seekBar" value="0" min="0" step="0.1" oninput="seekVideo(this.value)">
                         </div>
@@ -708,11 +911,15 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 var durTimeTxt = document.getElementById('duration');
                 var nextBtn = document.getElementById('btn-next');
 
-                // Toggle Play/Pause
+                // Toggle Play/Pause. The icon text itself is driven by the video's own
+                // play/pause events (below), not set here directly -- iOS Safari blocks
+                // autoplay-with-sound, so the "autoplay" attribute above can silently fail
+                // to actually start playback, and a hardcoded icon would then lie about it.
                 window.togglePlay = function() {{
-                    if (vid.paused) {{ vid.play(); btn.innerText = "⏸"; }} 
-                    else {{ vid.pause(); btn.innerText = "▶"; }}
+                    if (vid.paused) {{ vid.play(); }} else {{ vid.pause(); }}
                 }};
+                vid.onplay = function() {{ btn.innerText = "⏸"; }};
+                vid.onpause = function() {{ btn.innerText = "▶"; }};
 
                 // Seek Video
                 window.seekVideo = function(val) {{ vid.currentTime = val; }};
@@ -755,11 +962,17 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 container.innerHTML = contentHTML;
 
             }} else if (item.type === 'pdf') {{
+                // Embedded <iframe> PDF rendering is unreliable on iOS Safari and some
+                // Android Chrome builds (frequently renders blank, with no JS-observable
+                // error to detect and recover from). An always-visible "Open" link is a
+                // reliable fallback since it hands off to the OS/browser's native PDF
+                // handling instead of depending on in-iframe rendering support.
                 contentHTML = `
                     <div class="pdf-container">
                         ${{titleHTML}}
-                        <div style="grid-row: 2; overflow: hidden; min-height: 0;">
+                        <div style="grid-row: 2; overflow: hidden; min-height: 0; position: relative;">
                             <iframe src="${{item.src}}#toolbar=0" class="pdf-frame" style="width: 100%; height: 100%; border: 1px solid #ddd;"></iframe>
+                            <a href="${{item.src}}" target="_blank" rel="noopener" class="pdf-open-link">⤢ Open document</a>
                         </div>
                         <div style="grid-row: 3;">
                             ${{navBarStart}}</div><button class="btn" onclick="manualComplete()">Mark as Read & Next ➜</button>${{navBarEnd}}
@@ -838,8 +1051,8 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             nextStep();
         }}
         
-        function nextStep() {{ currentStep++; renderStep(); }}
-        function prevStep() {{ if (currentStep > 0) {{ currentStep--; renderStep(); }} }}
+        function nextStep() {{ currentStep++; renderStep(); persistProgress(); }}
+        function prevStep() {{ if (currentStep > 0) {{ currentStep--; renderStep(); persistProgress(); }} }}
 
         function showFinalResult(container) {{
             renderSidebar();
@@ -931,8 +1144,12 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                 <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
                 <h1>{course_title}</h1>
             </div>
-            <div class="header-right">{logo_html}</div>
+            <div class="header-right">
+                <button class="save-exit-btn" id="save-exit-btn" onclick="saveAndExit()">💾 Save &amp; Exit</button>
+                {logo_html}
+            </div>
         </div>
+        <div class="resume-notice" id="resume-notice"></div>
         <div class="content-area"><div class="card"><div id="app-content">Loading Course...</div></div></div>
     </div>
 </body>

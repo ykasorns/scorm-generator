@@ -76,6 +76,9 @@ def render_content_form(mode, key_prefix, content_type, prefill=None, item_index
         v_title = st.text_input("Chapter Title", value=prefill.get("title", ""), key=f"{key_prefix}_v_title")
         if prefill.get("filename"):
             st.caption(f"Current file: {prefill['filename']} (leave blank to keep it)")
+        sub_file = st.file_uploader("Subtitles (.vtt, optional)", type=['vtt'], key=f"{key_prefix}_v_sub_file")
+        if prefill.get("sub_filename"):
+            st.caption(f"Current subtitles: {prefill['sub_filename']} (leave blank to keep them)")
         if st.button(submit_label, key=f"{key_prefix}_v_submit"):
             if v_title and (v_file or "file" in prefill):
                 new_item = {"type": "video", "title": v_title,
@@ -84,6 +87,12 @@ def render_content_form(mode, key_prefix, content_type, prefill=None, item_index
                     new_item["file"] = v_file
                 elif "file" in prefill:
                     new_item["file"] = prefill["file"]
+                if sub_file:
+                    new_item["sub_file"] = sub_file
+                    new_item["sub_filename"] = sub_file.name
+                elif "sub_file" in prefill:
+                    new_item["sub_file"] = prefill["sub_file"]
+                    new_item["sub_filename"] = prefill.get("sub_filename")
                 _commit_item(mode, item_index, new_item)
             else:
                 st.error("Add a title and a video file.")
@@ -191,6 +200,12 @@ def build_assets_and_course_data(timeline):
             assets_map[clean_name] = item["file"].getvalue()
             data_obj["src"] = clean_name
 
+        # optional subtitles (video only)
+        if item["type"] == "video" and item.get("sub_file"):
+            sub_name = f"assets/res_{idx}_{item['sub_filename']}"
+            assets_map[sub_name] = item["sub_file"].getvalue()
+            data_obj["subtitleSrc"] = sub_name
+
         # quiz
         if item["type"] == "quiz":
             data_obj.update({
@@ -226,6 +241,10 @@ with st.sidebar:
                 asset_path = f"assets/res_{idx}_{item['filename']}"
                 if asset_path in assets_map:
                     item["file"] = FakeUploadFile(item["filename"], assets_map[asset_path])
+            if item.get("type") == "video" and item.get("sub_filename") and "sub_file" not in item:
+                sub_asset_path = f"assets/res_{idx}_{item['sub_filename']}"
+                if sub_asset_path in assets_map:
+                    item["sub_file"] = FakeUploadFile(item["sub_filename"], assets_map[sub_asset_path])
 
         st.session_state["_just_loaded"] = True
         st.success("Project loaded ✅")
@@ -275,7 +294,7 @@ with st.sidebar:
                 ],
                 ui_state={
                     "settings": st.session_state["settings"],
-                    "timeline": [{k: v for k, v in it.items() if k != "file"} for it in st.session_state["timeline"]],
+                    "timeline": [{k: v for k, v in it.items() if k not in ("file", "sub_file")} for it in st.session_state["timeline"]],
                     "js_course_data": js_course_data,
                 }
             )
@@ -424,13 +443,13 @@ else:
                 ],
                 ui_state={
                     "settings": st.session_state["settings"],
-                    "timeline": [{k: v for k, v in it.items() if k != "file"} for it in st.session_state["timeline"]],
+                    "timeline": [{k: v for k, v in it.items() if k not in ("file", "sub_file")} for it in st.session_state["timeline"]],
                     "js_course_data": js_course_data,  # ✅ ให้ builder ใช้ render HTML
                 }
             )
 
             # 5) Build SCORM package ZIP using new builder
-            zip_bytes = build_scorm_package(project, assets_map, logo=logo_tuple)
+            zip_bytes = build_scorm_package(project, assets_map, logo=logo_tuple, warn=st.warning)
 
             st.success("Export Successful! ✅")
             st.download_button(
