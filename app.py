@@ -20,7 +20,7 @@ st.set_page_config(page_title="SCORM Course Builder Pro", page_icon="🎓", layo
 if 'timeline' not in st.session_state:
     st.session_state['timeline'] = []
 if 'settings' not in st.session_state:
-    st.session_state['settings'] = {"title": "Security Awareness Training", "color": "#D2836C", "pass": 80, "edition": "1.2"}
+    st.session_state['settings'] = {"title": "Untitled Course", "color": "#D2836C", "pass": 80, "edition": "1.2"}
 
 st.session_state['settings'].setdefault("edition", "1.2")
 st.session_state.setdefault('editing_index', None)
