@@ -169,8 +169,12 @@ def build_scorm_package(
     file-like objects (e.g. a Streamlit UploadedFile) rather than bytes --
     both let a 300-600MB video stream through in chunks instead of being
     fully materialized in memory, which the old bytes-in/bytes-out signature
-    could not avoid. Callers can pass the result straight to
-    st.download_button(data=...) or read/seek it like any other file object.
+    could not avoid. Read/seek it like any other file object -- but note
+    st.download_button(data=...) does NOT accept a SpooledTemporaryFile
+    directly (it doesn't subclass io.IOBase, so Streamlit's type check
+    rejects it); callers using download_button need `.read()` at that final
+    boundary (see app.py), which is the one unavoidable full materialization
+    in this pipeline.
 
     `warn`, if given, is called with a human-readable message if
     ScormSettings.suspendDataLimitGuard is on and the course is large enough
